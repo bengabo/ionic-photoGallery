@@ -8,9 +8,28 @@ const { Camera, Filesystem, Storage } = Plugins;
   providedIn: 'root'
 })
 export class PhotoService {
-  public photos: Photo[] = []
+  public photos: Photo[] = [];
+  private PHOTO_STORAGE: string = "photos";
 
   constructor() { }
+
+  public async loadSaved() {
+    // Retrieve cached photo array data
+    const photos = await Storage.get({ key: this.PHOTO_STORAGE });
+    this.photos = JSON.parse(photos.value) || [];
+
+    // Display the photo by reading into base64 format
+    for (let photo of this.photos) {
+      // Read each saved photo's data from the Filesystem
+      const readFile = await Filesystem.readFile({
+          path: photo.filepath,
+          directory: FilesystemDirectory.Data
+      });
+
+      // Web platform only: Save the photo into the base64 field
+      photo.base64 = `data:image/jpeg;base64,${readFile.data}`;
+    }
+  }
 
   public async addNewToGallery() {
     // Take a photo
@@ -22,12 +41,17 @@ export class PhotoService {
 
     // Save the picture and add it to photo collection
     const savedImageFile = await this.savePicture(capturedPhoto);
-    this.photos.unshift(savedImageFile
-    //   {
-    //   filepath: "soon...",
-    //   webviewPath: capturedPhoto.webPath
-    // }
-    );
+    this.photos.unshift(savedImageFile);
+
+    Storage.set({
+      key: this.PHOTO_STORAGE,
+      value: JSON.stringify(this.photos.map(p => {
+        const photoCopy = { ...p };
+        delete photoCopy.base64;
+
+        return photoCopy;
+      }))
+    });
   }
 
   private async savePicture(cameraPhoto: CameraPhoto) {
